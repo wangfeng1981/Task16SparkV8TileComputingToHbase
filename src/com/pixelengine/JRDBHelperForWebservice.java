@@ -4,6 +4,7 @@ package com.pixelengine;
 //
 /// 这个接口是Java与关系数据库MYSQL交互的
 //update 2022-2-13 2310
+//update 2022-3-24 0459
 //
 /////////////////////////////////////////////////////////
 
@@ -1629,5 +1630,176 @@ public class JRDBHelperForWebservice {
         }
     }
 
+
+    /** 2022-3-24
+     * 对已有产品添加波段记录，不做重复性检验，
+     * @param mypid
+     * @param hpid
+     * @param numbands
+     * @return
+     */
+    public boolean writeProductBandRecord(int mypid, int hpid,int numbands,double validmin,double validmax,double filldata)
+    {
+        //        {
+        //            "hPid":1,
+        //                "bsqIndex":0,
+        //                "bName":"NDVI",
+        //                "scale":0.0001,
+        //                "offset":0,
+        //                "validMin":-2000,
+        //                "validMax":12000,
+        //                "noData":-3000
+        //        }
+        try
+        {
+            String allquery = "" ;
+            for(int ib = 0 ;ib<numbands;++ib )
+            {
+                String bandinfo =
+                        "{\"hPid\":" + hpid + ","
+                                +"\"bsqIndex\":"+ib+","
+                                +"\"bName\":"+"\"B"+(ib+1)+"\","
+                                +"\"scale\":1,"
+                                +"\"offset\":0,"
+                                +"\"validMin\":"+validmin+","
+                                +"\"validMax\":"+validmax+","
+                                +"\"noData\":"+filldata
+                                +"}" ;
+                String query = "INSERT INTO `tbproductband`(`pid`, `bindex`, `info`) VALUES ("+mypid+","+ib+",'"+bandinfo+"');";
+                allquery += query ;
+            }
+
+            // create the mysql insert preparedstatement
+            PreparedStatement preparedStmt = JRDBHelperForWebservice.getConnection().prepareStatement(allquery);
+            // execute the preparedstatement
+            preparedStmt.executeUpdate();
+            int num = preparedStmt.getUpdateCount() ;
+            if( num>0 ){
+                System.out.println("writeProductBandRecord update count:"+num) ;
+                return true ;
+            }else{
+                return false ;
+            }
+        }catch (Exception ex )
+        {
+            System.out.println("Error : writeProductBandRecord exception , " + ex.getMessage() ) ;
+            return false ;
+        }
+    }
+
+
+    /** 2022-3-24
+     * 写入一条产品记录
+     * @param mypid
+     * @param hcol
+     * @param left
+     * @param right
+     * @param top
+     * @param bottom
+     * @return
+     */
+    public int writeProductDataItem(int mypid,long hcol,double left,double right,double top,double bottom)
+    {
+        try
+        {
+            //INSERT INTO `tbproductdataitem`(`fid`, `pid`, `hcol`, `hleft`, `hright`, `htop`, `hbottom`, `createtime`, `updatetime`) VALUES ('[value-1]','[value-2]','[value-3]','[value-4]','[value-5]','[value-6]','[value-7]','[value-8]','[value-9]')
+            String query = "INSERT INTO `tbproductdataitem`(`pid`, `hcol`, `hleft`, `hright`, `htop`, `hbottom`, `createtime`, `updatetime`)"
+                    + " VALUES (?, ?,  ?,?,?,?,   ?,?)";
+            // create the mysql insert preparedstatement
+            PreparedStatement preparedStmt = JRDBHelperForWebservice.getConnection().prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+            preparedStmt.setInt (1, mypid );
+            preparedStmt.setLong (2, hcol);
+            preparedStmt.setDouble   (3, left);
+            preparedStmt.setDouble    (4, right);
+            preparedStmt.setDouble    (5, top );
+            preparedStmt.setDouble    (6, bottom );
+            preparedStmt.setString    (7, getCurrentDatetimeStr() );//
+            preparedStmt.setString    (8, getCurrentDatetimeStr());//
+            // execute the preparedstatement
+            preparedStmt.executeUpdate();
+            ResultSet rs = preparedStmt.getGeneratedKeys();
+            int last_inserted_id = -1 ;
+            if(rs.next())
+            {
+                last_inserted_id = rs.getInt(1);
+            }
+            return last_inserted_id;
+        }catch (Exception ex )
+        {
+            System.out.println("Error : writeProductDataItem exception , " + ex.getMessage() ) ;
+            return -1 ;
+        }
+    }
+
+
+    /** 2022-3-24
+     * 更新产品信息
+     * @param mypid
+     * @param name
+     * @param proj
+     * @param minZoom
+     * @param maxZoom
+     * @param dataType
+     * @param timeType 时间尺度，1秒，2分钟，3小时，4日、5月、6季、7年，后面还可以包括11（候）、12（八天）、13（旬）、14（16天）。用户生产的文件没有时间尺度意义，使用0值。
+     * @param hTableName
+     * @param tileWid
+     * @param tileHei
+     * @param compress
+     * @param styleid
+     * @return
+     */
+    public boolean updateProductNameAndInfo(int mypid,
+                                            String name,
+                                            String proj,
+                                            Integer minZoom,Integer maxZoom,
+                                            Integer dataType,
+                                            Integer timeType,
+                                            String hTableName,
+                                            Integer tileWid,
+                                            Integer tileHei,
+                                            String compress,
+                                            Integer styleid ){
+        //        {
+        //            "proj":"EPSG:4326",
+        //                "minZoom":0,
+        //                "maxZoom":5,
+        //                "dataType":3,
+        //                "timeType":5,
+        //                "hTableName":"sparkv8out",
+        //                "tileWid":256,
+        //                "tileHei":256,
+        //                "compress":"deflate",
+        //                "styleid":0
+        //        }
+        Gson gson = new Gson() ;
+        Map<String, Object> pdtinfo = new HashMap<>();
+        pdtinfo.put("proj", proj);
+        pdtinfo.put("minZoom", minZoom);
+        pdtinfo.put("maxZoom", maxZoom);
+        pdtinfo.put("dataType", dataType);
+        pdtinfo.put("timeType", timeType);
+        pdtinfo.put("hTableName", hTableName);
+        pdtinfo.put("tileWid", tileWid);
+        pdtinfo.put("tileHei", tileHei);
+        pdtinfo.put("compress", compress);
+        pdtinfo.put("styleid", styleid);
+
+        String pdtinfojsonstr = gson.toJson(pdtinfo) ;
+
+        try{
+            //
+            String query2 = "UPDATE tbproduct SET name=? , info=? WHERE pid=?";
+            PreparedStatement preparedStmt2 = JRDBHelperForWebservice.getConnection().prepareStatement(query2);
+            preparedStmt2.setString(1 , name);
+            preparedStmt2.setString(2, pdtinfojsonstr);
+            preparedStmt2.setInt   (3, mypid);
+            preparedStmt2.executeUpdate();
+            return true ;
+        }catch (Exception ex )
+        {
+            System.out.println("Error : updateProductNameAndInfo exception , " + ex.getMessage() ) ;
+            return false ;
+        }
+    }
 
 }

@@ -336,6 +336,7 @@ public class Main {
             }
         }) ;
 
+        //trigger spark to run
         List<Integer> allTcStatus = tileResRdd.collect() ;
         ListIterator<Integer> tcStatusIter = allTcStatus.listIterator() ;
         int goodTcCount = 0 ;
@@ -344,6 +345,48 @@ public class Main {
             if( 0 == tcStatusIter.next() ) ++ goodTcCount ;
             else ++ badTcCount ;
         }
+
+        //add band records
+        boolean bandsok = rdb.writeProductBandRecord(tcHbOrder.mpid_hpid,tcHbOrder.mpid_hpid,
+                tileResultWithRunAfterInfo.nbands,0,255,tcHbOrder.filldata) ;
+        if( bandsok==false ){
+            System.out.println("failed to write band infos into mysql.");
+            writeResultJson(24,"failed to write band infos into mysql.");
+            return 24 ;
+        }
+        System.out.println("write bands records ok.");
+
+        //add dataitem record
+        int dataitemId = rdb.writeProductDataItem(tcHbOrder.mpid_hpid,tcHbOrder.out_hcol,outExtentLeft,
+                outExtentRight,outExtentTop,outExtentBottom) ;
+        if( dataitemId<0 ){
+            System.out.println("failed to write data item into mysql.");
+            writeResultJson(25,"failed to write data item into mysql.");
+            return 25 ;
+        }
+        System.out.println("write data item records ok:" + dataitemId);
+
+        //update mysql tbproduct record
+        String pdtName = "user/" + tcHbOrder.mpid_hpid ;
+        boolean updatepdtok = rdb.updateProductNameAndInfo(tcHbOrder.mpid_hpid,
+                pdtName,
+                projStr,
+                0,
+                maxZoom,
+                tileResultWithRunAfterInfo.dataType,
+                0,
+                tcHbOrder.out_htable,
+                256,256,
+                "deflate" ,
+                0
+                ) ;
+        if( updatepdtok==false){
+            System.out.println("failed to update pdt info.");
+            writeResultJson(26,"failed to update pdt info.");
+            return 26 ;
+        }
+        System.out.println("update pdt name and info ok:" + pdtName);
+
 
         //done.
         writeResultJson(0,"success done, good:"+goodTcCount+", bad:"+badTcCount);
@@ -375,6 +418,7 @@ public class Main {
         System.out.println("v1.0.1 created 2022-3-23.") ;
         System.out.println("v1.1.1 use outter task17config.json 2022-3-23.") ;
         System.out.println("v1.2.0 add direct roi2 clip 2022-3-24.") ;
+        System.out.println("v1.3.0 add mysql staff 2022-3-24.") ;
         System.out.println("usage:");
         System.out.println("spark-submit --master spark://xxx:7077 Task16SparkV8TileComputingToHbase.jar ");
         System.out.println("    task17config.json ");
